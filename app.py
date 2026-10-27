@@ -1,328 +1,244 @@
 """
-src/styles.py
-Centralised CSS for the Fraud Detection Dashboard.
-Import and call inject_global_css() at the top of each page.
+app.py — Fraud Detection Dashboard  (Home)
+Author : Janmejay Singh Rathore
+Dataset: IEEE-CIS Fraud Detection (Kaggle)
+Model  : LightGBM (primary), Random Forest, Logistic Regression
 """
+
+import sys, os
+sys.path.insert(0, os.path.dirname(__file__))
 
 import streamlit as st
 
-# ── Palette (mirrors visualizations.py) ─────────────────────────────────────
-PALETTE = {
-    "fraud":   "#FF4B6E",
-    "legit":   "#6C63FF",
-    "accent":  "#00D4AA",
-    "warn":    "#FFC107",
-    "bg":      "#0E1117",
-    "surface": "#1A1D27",
-    "surface2":"#12151F",
-    "border":  "rgba(108,99,255,0.25)",
-    "text":    "#FAFAFA",
-    "muted":   "#8B8FA8",
-}
+# ── Page config ──────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="Fraud Detection Dashboard",
+    page_icon="🛡️",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
-GLOBAL_CSS = """
-<style>
-/* ── Google Font ──────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+from datetime import datetime
 
-html, body, [class*="css"], .stApp {
-    font-family: 'Inter', sans-serif !important;
-}
-
-/* ── Scrollbar ───────────────────────────────────────────── */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #12151F; }
-::-webkit-scrollbar-thumb { background: rgba(108,99,255,0.5); border-radius: 3px; }
-
-/* ── Sidebar ─────────────────────────────────────────────── */
-[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #0E1117 0%, #12151F 100%) !important;
-    border-right: 1px solid rgba(108,99,255,0.15) !important;
-}
-[data-testid="stSidebar"] .stMarkdown h3 {
-    color: #6C63FF;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-}
-
-/* ── Main content background ─────────────────────────────── */
-.stApp { background: #0E1117; }
-
-/* ── Metric cards ────────────────────────────────────────── */
-[data-testid="metric-container"] {
-    background: linear-gradient(135deg, #1A1D27 0%, #12151F 100%);
-    border: 1px solid rgba(108,99,255,0.25);
-    border-radius: 16px;
-    padding: 1.1rem 1.5rem;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
-    transition: box-shadow 0.2s ease, transform 0.2s ease;
-}
-[data-testid="metric-container"]:hover {
-    box-shadow: 0 8px 32px rgba(108,99,255,0.2);
-    transform: translateY(-2px);
-}
-[data-testid="metric-container"] [data-testid="stMetricLabel"] {
-    font-size: 0.8rem !important;
-    color: #8B8FA8 !important;
-    font-weight: 500 !important;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-}
-[data-testid="metric-container"] [data-testid="stMetricValue"] {
-    font-size: 1.7rem !important;
-    font-weight: 700 !important;
-    color: #FAFAFA !important;
-}
-[data-testid="metric-container"] [data-testid="stMetricDelta"] {
-    font-size: 0.78rem !important;
-}
-
-/* ── Buttons ─────────────────────────────────────────────── */
-.stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #6C63FF, #5A52E0) !important;
-    border: none !important;
-    border-radius: 10px !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.02em;
-    box-shadow: 0 4px 15px rgba(108,99,255,0.4) !important;
-    transition: all 0.2s ease !important;
-}
-.stButton > button[kind="primary"]:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 8px 25px rgba(108,99,255,0.6) !important;
-}
-
-/* ── Tabs ────────────────────────────────────────────────── */
-[data-testid="stTabs"] button {
-    border-radius: 8px 8px 0 0;
-    font-weight: 600 !important;
-    letter-spacing: 0.02em;
-    transition: color 0.2s ease;
-}
-[data-testid="stTabs"] button[aria-selected="true"] {
-    color: #6C63FF !important;
-    border-bottom: 2px solid #6C63FF !important;
-}
-
-/* ── Expander ────────────────────────────────────────────── */
-[data-testid="stExpander"] {
-    background: linear-gradient(135deg, #1A1D27, #12151F);
-    border: 1px solid rgba(108,99,255,0.2);
-    border-radius: 12px;
-}
-[data-testid="stExpander"] summary {
-    font-weight: 600;
-    color: #FAFAFA;
-}
-
-/* ── Info / Warning / Error boxes ────────────────────────── */
-[data-testid="stAlert"] {
-    border-radius: 12px !important;
-    border-left-width: 4px !important;
-}
-
-/* ── Dataframe ───────────────────────────────────────────── */
-[data-testid="stDataFrame"] iframe,
-[data-testid="stDataFrameGlide"] {
-    border-radius: 12px;
-    border: 1px solid rgba(108,99,255,0.2);
-}
-
-/* ── Select / Slider ─────────────────────────────────────── */
-[data-testid="stSlider"] .stSlider > div > div > div {
-    background: #6C63FF;
-}
-
-/* ── Shared utility classes ──────────────────────────────── */
-.hero {
-    background: linear-gradient(135deg, #0E1117 0%, #1A1D27 50%, #0d1020 100%);
-    border: 1px solid rgba(108,99,255,0.3);
-    border-radius: 20px;
-    padding: 2.5rem 3rem;
-    margin-bottom: 2rem;
-    box-shadow: 0 8px 40px rgba(108,99,255,0.12), inset 0 1px 0 rgba(255,255,255,0.04);
-    position: relative;
-    overflow: hidden;
-}
-.hero::before {
-    content: '';
-    position: absolute;
-    top: -50%; left: -20%;
-    width: 60%; height: 200%;
-    background: radial-gradient(ellipse, rgba(108,99,255,0.08) 0%, transparent 70%);
-    pointer-events: none;
-}
-.hero h1 {
-    font-size: 2.6rem; font-weight: 800;
-    background: linear-gradient(90deg, #6C63FF, #00D4AA);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    margin: 0; letter-spacing: -0.03em; line-height: 1.1;
-}
-.hero p { color: #8B8FA8; font-size: 1.05rem; margin-top: 0.6rem; line-height: 1.6; }
-.hero .hero-sub { color: #8B8FA8; }
-
-.section-title {
-    font-size: 1.2rem; font-weight: 700; color: #6C63FF;
-    border-left: 4px solid #6C63FF; padding-left: 0.75rem;
-    margin: 1.5rem 0 1rem 0; letter-spacing: -0.01em;
-}
-
-.badge {
-    display: inline-flex; align-items: center; gap: 4px;
-    background: rgba(108,99,255,0.15);
-    border: 1px solid rgba(108,99,255,0.4);
-    border-radius: 8px;
-    padding: 0.25rem 0.75rem;
-    font-size: 0.82rem; color: #6C63FF;
-    margin: 0.2rem; font-weight: 500;
-    transition: background 0.2s;
-}
-.badge:hover { background: rgba(108,99,255,0.25); }
-
-.badge-green {
-    background: rgba(0,212,170,0.15);
-    border-color: rgba(0,212,170,0.4);
-    color: #00D4AA;
-}
-.badge-red {
-    background: rgba(255,75,110,0.15);
-    border-color: rgba(255,75,110,0.4);
-    color: #FF4B6E;
-}
-
-.card {
-    background: linear-gradient(135deg, #1A1D27 0%, #12151F 100%);
-    border: 1px solid rgba(108,99,255,0.2);
-    border-radius: 16px;
-    padding: 1.5rem 2rem;
-    margin-bottom: 1rem;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-.card:hover {
-    border-color: rgba(108,99,255,0.4);
-    box-shadow: 0 8px 32px rgba(108,99,255,0.1);
-}
-
-.card-accent {
-    border-left: 4px solid #6C63FF;
-}
-
-.tag {
-    display: inline-block;
-    background: rgba(108,99,255,0.15);
-    border: 1px solid rgba(108,99,255,0.35);
-    border-radius: 6px;
-    padding: 0.2rem 0.65rem;
-    font-size: 0.78rem; color: #6C63FF;
-    margin: 0.2rem; font-weight: 500;
-}
-
-.fraud-box {
-    background: linear-gradient(135deg, rgba(255,75,110,0.15), rgba(255,75,110,0.05));
-    border: 1px solid #FF4B6E;
-    border-radius: 16px; padding: 1.5rem; text-align: center;
-    animation: pulse-red 2s infinite;
-}
-.safe-box {
-    background: linear-gradient(135deg, rgba(108,99,255,0.15), rgba(108,99,255,0.05));
-    border: 1px solid #6C63FF;
-    border-radius: 16px; padding: 1.5rem; text-align: center;
-    animation: pulse-blue 2s infinite;
-}
-@keyframes pulse-red {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(255,75,110,0.3); }
-    50%       { box-shadow: 0 0 0 8px rgba(255,75,110,0); }
-}
-@keyframes pulse-blue {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(108,99,255,0.3); }
-    50%       { box-shadow: 0 0 0 8px rgba(108,99,255,0); }
-}
-.prob-label { font-size: 2.5rem; font-weight: 800; margin: 0; letter-spacing: -0.02em; }
-
-.stat-row {
-    display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem;
-}
-.stat-pill {
-    background: rgba(108,99,255,0.12);
-    border: 1px solid rgba(108,99,255,0.3);
-    border-radius: 50px;
-    padding: 0.4rem 1rem;
-    font-size: 0.85rem; color: #FAFAFA;
-    font-weight: 500;
-}
-
-.footer {
-    text-align: center;
-    color: #4A4E6A;
-    font-size: 0.78rem;
-    padding: 2rem 0 1rem;
-    border-top: 1px solid rgba(108,99,255,0.1);
-    margin-top: 2rem;
-}
-</style>
-"""
+from src.data_loader    import load_data, get_class_distribution
+from src.visualizations import (
+    class_distribution_pie,
+    transaction_amount_hist,
+    hourly_fraud_rate,
+    correlation_heatmap,
+)
+from src.styles import inject_global_css, section_title, footer
 
 
-def clean_html(s: str) -> str:
-    """Remove indentation and blank lines so Markdown never treats the HTML
-    as a code block or ends the HTML block early (blank line = block end)."""
+def html(s: str) -> str:
+    """Strip leading spaces and blank lines so Markdown never treats the
+    HTML as an indented code block (4+ spaces) or ends it at a blank line."""
     return "\n".join(line.strip() for line in s.strip().splitlines() if line.strip())
 
 
-def _patch_markdown():
-    """Make every HTML block rendered with unsafe_allow_html=True safe.
-
-    Blocks that start with '<' are de-indented and stripped of blank lines,
-    so Markdown cannot show them as raw text. Plain Markdown is untouched.
-    Applies to st.markdown, st.sidebar.markdown and column/container markdown.
-    """
-    from streamlit.delta_generator import DeltaGenerator
-
-    if getattr(DeltaGenerator.markdown, "_html_safe", False):
-        return
-
-    def _fix(body, kwargs):
-        if (
-            kwargs.get("unsafe_allow_html")
-            and isinstance(body, str)
-            and body.lstrip().startswith("<")
-        ):
-            return clean_html(body)
-        return body
-
-    _orig_dg = DeltaGenerator.markdown
-
-    def _dg_markdown(self, body, *args, **kwargs):
-        return _orig_dg(self, _fix(body, kwargs), *args, **kwargs)
-
-    _dg_markdown._html_safe = True
-    DeltaGenerator.markdown = _dg_markdown
-
-    _orig_st = st.markdown
-
-    def _st_markdown(body, *args, **kwargs):
-        return _orig_st(_fix(body, kwargs), *args, **kwargs)
-
-    _st_markdown._html_safe = True
-    st.markdown = _st_markdown
+def render(s: str):
+    st.markdown(html(s), unsafe_allow_html=True)
 
 
-def inject_global_css():
-    """Inject the shared CSS into the current Streamlit page."""
-    _patch_markdown()
-    st.markdown(clean_html(GLOBAL_CSS), unsafe_allow_html=True)
+# ── Inject CSS ───────────────────────────────────────────────────────────────
+inject_global_css()
 
+# ── Sidebar ──────────────────────────────────────────────────────────────────
+with st.sidebar:
+    render("""
+    <div style="text-align:center;padding:1rem 0 0.5rem;">
+        <div style="font-size:2.5rem;">🛡️</div>
+        <h3 style="margin:0.25rem 0 0;letter-spacing:-0.02em;">FraudShield</h3>
+        <p style="color:#8B8FA8;font-size:0.8rem;margin:0;">IEEE-CIS · LightGBM</p>
+    </div>
+    """)
+    st.markdown("---")
 
-def section_title(text: str):
-    """Render a styled section heading."""
-    st.markdown(f'<p class="section-title">{text}</p>', unsafe_allow_html=True)
+    st.markdown("**📌 Navigation**")
+    render("""
+    <div style="display:flex;flex-direction:column;gap:4px;padding:0.25rem 0;">
+      <div style="background:rgba(108,99,255,0.2);border-radius:8px;padding:0.4rem 0.75rem;border-left:3px solid #6C63FF;font-size:0.9rem;">🏠 <b>Home</b> ← you are here</div>
+      <div style="padding:0.4rem 0.75rem;font-size:0.9rem;color:#8B8FA8;">📊 EDA — Data exploration</div>
+      <div style="padding:0.4rem 0.75rem;font-size:0.9rem;color:#8B8FA8;">🤖 Model Training — Train &amp; compare</div>
+      <div style="padding:0.4rem 0.75rem;font-size:0.9rem;color:#8B8FA8;">🔮 Predict — Live transaction check</div>
+      <div style="padding:0.4rem 0.75rem;font-size:0.9rem;color:#8B8FA8;">ℹ️ About — Project details</div>
+      <div style="padding:0.4rem 0.75rem;font-size:0.9rem;color:#8B8FA8;">📋 Summary — Overall summarisation</div>
+    </div>
+    """)
 
+    st.markdown("---")
 
-def footer():
-    """Render the shared footer."""
+    # Model status
+    is_trained = "train_results" in st.session_state
+    status_html = (
+        '<span class="badge badge-green">✅ Model Trained</span>'
+        if is_trained else
+        '<span class="badge badge-red">⏳ Not Trained Yet</span>'
+    )
+    st.markdown(f"**Model Status**<br>{status_html}", unsafe_allow_html=True)
+
+    st.markdown("---")
     st.markdown(
-        '<div class="footer">© 2024 Janmejay Singh Rathore &nbsp;·&nbsp; '
-        'IEEE-CIS Fraud Detection &nbsp;·&nbsp; Built with ❤️ using Streamlit</div>',
+        '<span class="badge">⚡ LightGBM</span>'
+        '<span class="badge">🌲 RF</span>'
+        '<span class="badge">📉 LR</span>',
         unsafe_allow_html=True,
     )
+    now = datetime.now().strftime("%d %b %Y, %H:%M")
+    st.caption(f"Janmejay Singh Rathore · {now}")
+
+# ── Load data ─────────────────────────────────────────────────────────────────
+df = load_data()
+
+# ── Hero ──────────────────────────────────────────────────────────────────────
+render("""
+<div class="hero">
+  <h1>🛡️ Fraud Detection Dashboard</h1>
+  <p class="hero-sub">
+    Real-time financial transaction analysis powered by <strong style="color:#6C63FF;">LightGBM</strong> on
+    the <strong style="color:#00D4AA;">IEEE-CIS</strong> dataset. Explore patterns, compare models, and
+    predict live transactions with explainability.
+  </p>
+  <div class="stat-row" style="margin-top:1.2rem;">
+    <span class="stat-pill">🏦 IEEE-CIS Dataset</span>
+    <span class="stat-pill">📊 3-Model Comparison</span>
+    <span class="stat-pill">⚡ Real-time Prediction</span>
+    <span class="stat-pill">🔍 Interactive Analytics</span>
+  </div>
+</div>
+""")
+
+# ── KPI metrics ───────────────────────────────────────────────────────────────
+dist = get_class_distribution(df)
+total        = dist["Legitimate"] + dist["Fraud"]
+fraud_rate   = dist["Fraud"] / max(total, 1) * 100
+avg_amt      = df["TransactionAmt"].mean()
+median_fraud = df[df["isFraud"] == 1]["TransactionAmt"].median() if dist["Fraud"] else 0
+night_fraud  = 0
+if "TransactionDT" in df.columns:
+    df2 = df.copy()
+    df2["hour"] = (df2["TransactionDT"] // 3600) % 24
+    night_tx  = df2[(df2["hour"] < 6) | (df2["hour"] >= 22)]
+    if len(night_tx):
+        night_fraud = night_tx["isFraud"].mean() * 100
+
+col1, col2, col3, col4, col5 = st.columns(5)
+col1.metric("📦 Total Transactions", f"{total:,}")
+col2.metric("🚨 Fraud Cases",        f"{dist['Fraud']:,}", f"{fraud_rate:.2f}% rate")
+col3.metric("✅ Legitimate",         f"{dist['Legitimate']:,}")
+col4.metric("💰 Avg Transaction",    f"${avg_amt:,.2f}")
+col5.metric("🌙 Night Fraud Rate",   f"{night_fraud:.1f}%", help="Fraud % between 10PM–6AM")
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ── Overview Analytics ────────────────────────────────────────────────────────
+section_title("📈 Overview Analytics")
+c1, c2 = st.columns(2)
+with c1:
+    st.plotly_chart(class_distribution_pie(dist), use_container_width=True)
+with c2:
+    st.plotly_chart(transaction_amount_hist(df), use_container_width=True)
+
+c3, c4 = st.columns(2)
+with c3:
+    if "TransactionDT" in df.columns:
+        st.plotly_chart(hourly_fraud_rate(df), use_container_width=True)
+    else:
+        st.info("TransactionDT column not available for hourly chart.")
+with c4:
+    st.plotly_chart(correlation_heatmap(df), use_container_width=True)
+
+# ── Quick insights banner ─────────────────────────────────────────────────────
+# Each card is built as ONE html string. Streamlit renders every st.markdown()
+# call as a separate element, so opening <div> in one call and closing it in
+# another does not work.
+section_title("💡 Quick Insights")
+i1, i2, i3 = st.columns(3)
+
+with i1:
+    rows = ""
+    if "card4" in df.columns:
+        ctab = df.groupby("card4")["isFraud"].mean().sort_values(ascending=False)
+        for card, rate in ctab.items():
+            bar_w = min(int(rate * 1000), 100)
+            color = "#FF4B6E" if rate > 0.05 else "#6C63FF"
+            rows += f"""
+            <div style="margin:4px 0;">
+              <div style="display:flex;justify-content:space-between;font-size:0.85rem;">
+                <span>{card}</span><span style="color:{color};font-weight:600;">{rate*100:.1f}%</span>
+              </div>
+              <div style="height:4px;background:#1A1D27;border-radius:2px;margin-top:2px;">
+                <div style="height:4px;width:{bar_w}%;background:{color};border-radius:2px;"></div>
+              </div>
+            </div>
+            """
+    render(f"""
+    <div class="card card-accent">
+      <h4 style="color:#6C63FF;margin-top:0;">💳 Fraud by Card Type</h4>
+      {rows}
+    </div>
+    """)
+
+with i2:
+    rows = ""
+    if "DeviceType" in df.columns:
+        dtab = df.groupby("DeviceType")["isFraud"].agg(["count", "mean"]).reset_index()
+        for _, row in dtab.iterrows():
+            emoji = "🖥️" if row["DeviceType"] == "desktop" else "📱" if row["DeviceType"] == "mobile" else "❓"
+            rows += f"""
+            <div style="display:flex;justify-content:space-between;padding:0.4rem 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:0.88rem;">
+              <span>{emoji} {str(row['DeviceType']).title()}</span>
+              <span style="color:#8B8FA8;">{int(row['count']):,} txns &nbsp;|&nbsp;
+                <span style="color:#FF4B6E;font-weight:600;">{row['mean']*100:.1f}%</span> fraud</span>
+            </div>
+            """
+    render(f"""
+    <div class="card card-accent">
+      <h4 style="color:#00D4AA;margin-top:0;">📱 Device Breakdown</h4>
+      {rows}
+    </div>
+    """)
+
+with i3:
+    high_risk_pct = df[df["TransactionAmt"] > 500]["isFraud"].mean() * 100 if len(df) else 0
+    low_risk_pct  = df[df["TransactionAmt"] <= 100]["isFraud"].mean() * 100 if len(df) else 0
+    render(f"""
+    <div class="card card-accent">
+      <h4 style="color:#FFC107;margin-top:0;">💰 Amount Risk Bands</h4>
+      <div style="margin:0.5rem 0;">
+        <div style="display:flex;justify-content:space-between;font-size:0.88rem;padding:0.35rem 0;">
+          <span>💸 High-value (&gt;$500)</span>
+          <span style="color:#FF4B6E;font-weight:700;">{high_risk_pct:.1f}%</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:0.88rem;padding:0.35rem 0;">
+          <span>🪙 Low-value (≤$100)</span>
+          <span style="color:#00D4AA;font-weight:700;">{low_risk_pct:.1f}%</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:0.88rem;padding:0.35rem 0;">
+          <span>📊 Overall fraud rate</span>
+          <span style="color:#6C63FF;font-weight:700;">{fraud_rate:.2f}%</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:0.88rem;padding:0.35rem 0;">
+          <span>🚨 Median fraud amount</span>
+          <span style="color:#FFC107;font-weight:700;">${median_fraud:,.2f}</span>
+        </div>
+      </div>
+    </div>
+    """)
+
+# ── Dataset preview ───────────────────────────────────────────────────────────
+st.markdown("---")
+section_title("🗂️ Dataset Preview")
+with st.expander("Show sample rows"):
+    c_a, c_b = st.columns([3, 1])
+    with c_a:
+        n_rows = st.slider("Rows to display", 5, 100, 20)
+    with c_b:
+        show_fraud_only = st.checkbox("Fraud only")
+    display_df = df[df["isFraud"] == 1] if show_fraud_only else df
+    st.dataframe(display_df.head(n_rows), use_container_width=True)
+
+footer()
