@@ -264,9 +264,54 @@ html, body, [class*="css"], .stApp {
 """
 
 
+def clean_html(s: str) -> str:
+    """Remove indentation and blank lines so Markdown never treats the HTML
+    as a code block or ends the HTML block early (blank line = block end)."""
+    return "\n".join(line.strip() for line in s.strip().splitlines() if line.strip())
+
+
+def _patch_markdown():
+    """Make every HTML block rendered with unsafe_allow_html=True safe.
+
+    Blocks that start with '<' are de-indented and stripped of blank lines,
+    so Markdown cannot show them as raw text. Plain Markdown is untouched.
+    Applies to st.markdown, st.sidebar.markdown and column/container markdown.
+    """
+    from streamlit.delta_generator import DeltaGenerator
+
+    if getattr(DeltaGenerator.markdown, "_html_safe", False):
+        return
+
+    def _fix(body, kwargs):
+        if (
+            kwargs.get("unsafe_allow_html")
+            and isinstance(body, str)
+            and body.lstrip().startswith("<")
+        ):
+            return clean_html(body)
+        return body
+
+    _orig_dg = DeltaGenerator.markdown
+
+    def _dg_markdown(self, body, *args, **kwargs):
+        return _orig_dg(self, _fix(body, kwargs), *args, **kwargs)
+
+    _dg_markdown._html_safe = True
+    DeltaGenerator.markdown = _dg_markdown
+
+    _orig_st = st.markdown
+
+    def _st_markdown(body, *args, **kwargs):
+        return _orig_st(_fix(body, kwargs), *args, **kwargs)
+
+    _st_markdown._html_safe = True
+    st.markdown = _st_markdown
+
+
 def inject_global_css():
     """Inject the shared CSS into the current Streamlit page."""
-    st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
+    _patch_markdown()
+    st.markdown(clean_html(GLOBAL_CSS), unsafe_allow_html=True)
 
 
 def section_title(text: str):
